@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -16,6 +17,18 @@ pipeline {
             }
         }
 
+        stage('SonarCloud Analysis') {
+            steps {
+                withSonarQubeEnv('sonarcloud') {
+                    sh '''
+                        ./mvnw sonar:sonar \
+                        -Dsonar.projectKey=saibhanu071_dhilip-pickles \
+                        -Dsonar.organization=saibhanu071
+                    '''
+                }
+            }
+        }
+
         stage('Docker Build') {
             steps {
                 sh 'docker build -t dhilip-pickles:latest .'
@@ -25,10 +38,11 @@ pipeline {
 
     post {
         success {
-            echo 'Build and Docker image creation successful!'
+            echo 'Build, SonarCloud analysis and Docker image creation successful!'
         }
         failure {
             echo 'Pipeline failed. Check console output.'
         }
     }
 }
+
