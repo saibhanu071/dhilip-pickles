@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -33,14 +34,27 @@ pipeline {
                 sh 'docker build -t dhilip-pickles:latest .'
             }
         }
+
+        stage('Trivy Security Scan') {
+            steps {
+                sh '''
+                    mkdir -p "$HOME/trivy-tmp"
+                    TMPDIR="$HOME/trivy-tmp" trivy image \
+                    --exit-code 1 \
+                    --severity HIGH,CRITICAL \
+                    dhilip-pickles:latest
+                '''
+            }
+        }
     }
 
     post {
         success {
-            echo 'Build, SonarCloud analysis and Docker image creation successful!'
+            echo 'Build, SonarCloud, Docker and Trivy scan successful!'
         }
         failure {
             echo 'Pipeline failed. Check console output.'
         }
     }
 }
+
