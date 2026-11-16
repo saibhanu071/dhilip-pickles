@@ -15,14 +15,20 @@ pipeline {
                 sh './mvnw -B clean verify'
             }
         }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t dhilip-pickles:latest .'
+            }
+        }
     }
 
     post {
         success {
-            echo 'Build completed successfully!'
+            echo 'Build and Docker image creation successful!'
         }
         failure {
-            echo 'Build failed. Check console output.'
+            echo 'Pipeline failed. Check console output.'
         }
     }
 }
