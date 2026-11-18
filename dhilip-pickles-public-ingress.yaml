@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dhilip-pickles-public
+  namespace: default
+spec:
+  ingressClassName: public-alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dhilip-pickles
+                port:
+                  number: 80

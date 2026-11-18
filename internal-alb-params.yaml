@@ -1,0 +1,10 @@
+apiVersion: eks.amazonaws.com/v1
+kind: IngressClassParams
+metadata:
+  name: internal-alb
+spec:
+  scheme: internal
+  subnets:
+    ids:
+      - subnet-005e04c866798a586
+      - subnet-0be57c0c7a00931bf
