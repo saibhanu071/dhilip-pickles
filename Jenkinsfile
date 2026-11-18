@@ -2,76 +2,10 @@
 pipeline {
     agent any
 
-    stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-                echo 'GitHub checkout successful'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                sh 'chmod +x mvnw'
-                sh './mvnw -B clean verify'
-            }
-        }
-
-        stage('SonarCloud Analysis') {
-            steps {
-                withSonarQubeEnv('sonarcloud') {
-                    sh '''
-                        ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                        -Dsonar.projectKey=saibhanu071_dhilip-pickles \
-                        -Dsonar.organization=saibhanu071
-                    '''
-                }
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                sh 'docker build -t dhilip-pickles:latest .'
-            }
-        }
-
-        stage('Trivy Security Scan') {
-            steps {
-                sh '''
-                    mkdir -p "$HOME/trivy-tmp"
-                    TMPDIR="$HOME/trivy-tmp" trivy image \
-                    --exit-code 1 \
-                    --severity HIGH,CRITICAL \
-                    dhilip-pickles:latest
-                '''
-            }
-        }
-
-        stage('Push to AWS ECR') {
-            steps {
-                sh '''
-                    aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 173500116403.dkr.ecr.ap-southeast-2.amazonaws.com
-
-                    docker tag dhilip-pickles:latest 173500116403.dkr.ecr.ap-southeast-2.amazonaws.com/dhilip-pickles:latest
-
-                    docker push 173500116403.dkr.ecr.ap-southeast-2.amazonaws.com/dhilip-pickles:latest
-                '''
-            }
-        }
+    environment {
+        DOCKER_IMAGE = 'dhilip-pickles'
+        DOCKER_TAG = 'latest'
     }
-
-    post {
-        success {
-            echo 'Build, SonarCloud, Docker, Trivy and ECR push successful!'
-        }
-        failure {
-            echo 'Pipeline failed. Check console output.'
-        }
-    }
-}
-
-pipeline {
-    agent any
 
     stages {
         stage('Checkout') {
@@ -102,7 +36,7 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t dhilip-pickles:latest .'
+                sh 'docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .'
             }
         }
 
@@ -113,31 +47,40 @@ pipeline {
                     TMPDIR="$HOME/trivy-tmp" trivy image \
                     --exit-code 1 \
                     --severity HIGH,CRITICAL \
-                    dhilip-pickles:latest
+                    ${DOCKER_IMAGE}:${DOCKER_TAG}
                 '''
             }
         }
 
-        stage('Push to AWS ECR') {
+        stage('Push to Docker Hub') {
             steps {
-                sh '''
-                    aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 173500116403.dkr.ecr.ap-southeast-2.amazonaws.com
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_TOKEN'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_TOKEN" | docker login \
+                            -u "$DOCKER_USER" --password-stdin
 
-                    docker tag dhilip-pickles:latest 173500116403.dkr.ecr.ap-southeast-2.amazonaws.com/dhilip-pickles:latest
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} \
+                            "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
 
-                    docker push 173500116403.dkr.ecr.ap-southeast-2.amazonaws.com/dhilip-pickles:latest
-                '''
+                        docker push "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
+
+                        docker logout
+                    '''
+                }
             }
         }
     }
 
     post {
         success {
-            echo 'Build, SonarCloud, Docker, Trivy and ECR push successful!'
+            echo 'Build, SonarCloud, Docker, Trivy and Docker Hub push successful!'
         }
         failure {
             echo 'Pipeline failed. Check console output.'
         }
     }
 }
-
