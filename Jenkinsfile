@@ -61,7 +61,8 @@ pipeline {
                 )]) {
                     sh '''
                         echo "$DOCKER_TOKEN" | docker login \
-                            -u "$DOCKER_USER" --password-stdin
+                            --username "$DOCKER_USER" \
+                            --password-stdin
 
                         docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} \
                             "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
@@ -84,3 +85,4 @@ pipeline {
         }
     }
 }
+
