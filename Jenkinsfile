@@ -1,10 +1,14 @@
-
 pipeline {
     agent any
 
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
     environment {
-        DOCKER_IMAGE = 'dhilip-pickles'
-        DOCKER_TAG = 'latest'
+        IMAGE_REPO = 'saibhanu071/dhilip-pickles'
     }
 
     stages {
@@ -15,10 +19,12 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Maven Build and Unit Tests') {
             steps {
-                sh 'chmod +x mvnw'
-                sh './mvnw -B clean verify'
+                sh '''
+                    chmod +x mvnw
+                    ./mvnw -B clean verify
+                '''
             }
         }
 
@@ -34,9 +40,25 @@ pipeline {
             }
         }
 
+        stage('Generate Image Tag') {
+            steps {
+                script {
+                    env.IMAGE_TAG = sh(
+                        script: 'git rev-parse --short=12 HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+                echo "Docker image tag: ${IMAGE_TAG}"
+            }
+        }
+
         stage('Docker Build') {
             steps {
-                sh 'docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .'
+                sh '''
+                    docker build \
+                      -t "$IMAGE_REPO:$IMAGE_TAG" \
+                      .
+                '''
             }
         }
 
@@ -45,9 +67,9 @@ pipeline {
                 sh '''
                     mkdir -p "$HOME/trivy-tmp"
                     TMPDIR="$HOME/trivy-tmp" trivy image \
-                    --exit-code 1 \
-                    --severity HIGH,CRITICAL \
-                    ${DOCKER_IMAGE}:${DOCKER_TAG}
+                      --exit-code 1 \
+                      --severity HIGH,CRITICAL \
+                      "$IMAGE_REPO:$IMAGE_TAG"
                 '''
             }
         }
@@ -60,16 +82,18 @@ pipeline {
                     passwordVariable: 'DOCKER_TOKEN'
                 )]) {
                     sh '''
+                        set -e
+                        trap 'docker logout >/dev/null 2>&1 || true' EXIT
+
                         echo "$DOCKER_TOKEN" | docker login \
-                            --username "$DOCKER_USER" \
-                            --password-stdin
+                          --username "$DOCKER_USER" \
+                          --password-stdin
 
-                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} \
-                            "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                        docker tag "$IMAGE_REPO:$IMAGE_TAG" \
+                          "$IMAGE_REPO:latest"
 
-                        docker push "$DOCKER_USER/${DOCKER_IMAGE}:${DOCKER_TAG}"
-
-                        docker logout
+                        docker push "$IMAGE_REPO:$IMAGE_TAG"
+                        docker push "$IMAGE_REPO:latest"
                     '''
                 }
             }
@@ -78,11 +102,10 @@ pipeline {
 
     post {
         success {
-            echo 'Build, SonarCloud, Docker, Trivy and Docker Hub push successful!'
+            echo "SUCCESS: ${IMAGE_REPO}:${IMAGE_TAG} pushed to Docker Hub!"
         }
         failure {
-            echo 'Pipeline failed. Check console output.'
+            echo 'Pipeline failed. Check Jenkins Console Output.'
         }
     }
 }
-
